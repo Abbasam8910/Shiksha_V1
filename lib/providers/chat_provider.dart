@@ -19,6 +19,7 @@ final llmServiceProvider = Provider<LLMService>((ref) {
 });
 
 final currentSessionIdProvider = StateProvider<String?>((ref) => null);
+final currentChatSubjectProvider = StateProvider<String?>((ref) => null);
 
 // Track if LLM is currently generating a response
 final isGeneratingProvider = StateProvider<bool>((ref) => false);
@@ -41,7 +42,7 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
     }
   }
 
-  Future<void> startNewChat() async {
+  Future<void> startNewChat({String? subject}) async {
     if (kDebugMode) print('🆕 [PROVIDER] Starting new chat...');
 
     // Cancel any ongoing generation first
@@ -57,6 +58,7 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
     // Reset UI state
     state = [];
     _ref.read(currentSessionIdProvider.notifier).state = null;
+    _ref.read(currentChatSubjectProvider.notifier).state = subject;
     _ref.read(isGeneratingProvider.notifier).state = false;
 
     // Reset LLM context for new chat
@@ -345,6 +347,7 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
         title: title,
         messages: state,
         lastUpdated: DateTime.now(),
+        subject: _ref.read(currentChatSubjectProvider),
       );
       await _box.put(newId, newSession);
       _ref.read(currentSessionIdProvider.notifier).state = newId;
@@ -358,6 +361,7 @@ class ChatNotifier extends StateNotifier<List<ChatMessage>> {
           title: session.title,
           messages: state,
           lastUpdated: DateTime.now(),
+          subject: session.subject, // Keep existing subject
         );
         await _box.put(sessionId, updatedSession);
       }

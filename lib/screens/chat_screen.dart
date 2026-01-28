@@ -3,14 +3,57 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/chat_provider.dart';
+import '../providers/ui_provider.dart';
 import '../widgets/app_drawer.dart';
+import 'profile_setup_screen.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _DashedCirclePainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double gap;
+
+  _DashedCirclePainter({
+    required this.color,
+    this.strokeWidth = 2.0,
+    this.gap = 2.0, // Tighter gap for denser dash look
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    double radius = size.width / 2;
+    // circumference variable removed as it was unused
+    double dashWidth = 6.0; // Longer dashes per user request
+    double dashSpace = gap;
+    double startAngle = 0;
+
+    while (startAngle < 2 * 3.14159) {
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(radius, radius), radius: radius),
+        startAngle,
+        dashWidth / radius,
+        false,
+        paint,
+      );
+      startAngle += (dashWidth + dashSpace) / radius;
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
@@ -25,6 +68,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void initState() {
     super.initState();
     _initializeModelSilently();
+
+    // Check for initial text injection from Home Screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null && args.containsKey('initialText')) {
+        _textController.text = args['initialText'];
+        setState(() {}); // Update UI to show text
+      }
+    });
   }
 
   /// ✅ NEW: Load model silently in background - no blocking UI
@@ -128,37 +181,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToBottom();
   }
 
-  Future<void> _showClearChatDialog() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Clear Chat History?',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
-        ),
-        content: const Text(
-          'This will delete all messages and reset the AI context. This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Clear'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      await ref.read(chatProvider.notifier).startNewChat();
-      setState(() {});
-    }
-  }
-
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -178,18 +200,68 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final messages = ref.watch(chatProvider);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA), // Off-white background
       appBar: AppBar(
-        title: Text(
-          'Mobileshiksha',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Clear Chat',
-            onPressed: _showClearChatDialog,
+        titleSpacing: 0,
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0, // Prevent violet tint overlap
+        elevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(
+              Icons.menu,
+              color: Color(0xFF8B7FD6),
+            ), // Violet Menu
+            onPressed: () => Scaffold.of(context).openDrawer(),
           ),
+        ),
+        actions: [
+          // New Chat Button
+          IconButton(
+            onPressed: () {
+              ref.read(chatProvider.notifier).startNewChat();
+            },
+            icon: SizedBox(
+              width: 28,
+              height: 28,
+              child: CustomPaint(
+                painter: _DashedCirclePainter(
+                  color: const Color(0xFF8B7FD6),
+                  strokeWidth: 1.5,
+                  gap: 3.0,
+                ),
+                child: const Center(
+                  child: Icon(Icons.add, color: Color(0xFF8B7FD6), size: 16),
+                ),
+              ),
+            ),
+            tooltip: 'New Chat',
+          ),
+          // Profile Button
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    const ProfileSetupScreen(isEditMode: true),
+              ),
+            ),
+            icon: Container(
+              width: 28,
+              height: 28,
+              decoration: const BoxDecoration(
+                color: Color(0xFFE8E5F7),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.person,
+                color: Color(0xFF8B7FD6),
+                size: 18,
+              ),
+            ),
+            tooltip: 'Profile',
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       drawer: const AppDrawer(),
@@ -237,7 +309,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          color: const Color(0xFFF3E8FF), // Soft Violet Tint
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(16),
             topRight: Radius.circular(16),
@@ -247,20 +319,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _BouncingDot(
-              color: Theme.of(context).colorScheme.primary,
-              delay: 0,
-            ),
+            _BouncingDot(color: const Color(0xFF8B7FD6), delay: 0),
             const SizedBox(width: 4),
-            _BouncingDot(
-              color: Theme.of(context).colorScheme.primary,
-              delay: 150,
-            ),
+            _BouncingDot(color: const Color(0xFF8B7FD6), delay: 150),
             const SizedBox(width: 4),
-            _BouncingDot(
-              color: Theme.of(context).colorScheme.primary,
-              delay: 300,
-            ),
+            _BouncingDot(color: const Color(0xFF8B7FD6), delay: 300),
           ],
         ),
       ),
@@ -268,23 +331,150 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24.0),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.chat_bubble_outline,
-            size: 64,
-            color: Theme.of(context).colorScheme.outline,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Start a conversation',
-            style: GoogleFonts.outfit(
-              fontSize: 18,
-              color: Theme.of(context).colorScheme.outline,
+          const SizedBox(height: 20),
+
+          // Central Sparkle Icon Hero
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFB4A7FA), // Soft light violet (top-left)
+                  Color(0xFF9B8DE8), // Mid violet
+                  Color(0xFF7C5ED9), // Deep purple (bottom-right)
+                ],
+                stops: [0.0, 0.4, 1.0],
+              ),
+              shape: BoxShape.circle,
+              boxShadow: const [
+                BoxShadow(
+                  color: Color.fromRGBO(
+                    139,
+                    127,
+                    214,
+                    0.5,
+                  ), // Stronger shadow per HTML
+                  blurRadius: 40,
+                  spreadRadius: -10,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.auto_awesome,
+              size: 50,
+              color: Colors.white,
             ),
           ),
+          const SizedBox(height: 32), // 32px gap Logo → Hello
+          // Greeting Text
+          FutureBuilder<SharedPreferences>(
+            future: SharedPreferences.getInstance(),
+            builder: (context, snapshot) {
+              final name = snapshot.data?.getString('user_name') ?? 'Student';
+              return Column(
+                children: [
+                  Text(
+                    'Hello, $name!',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 20, // text-xl per HTML
+                      fontWeight: FontWeight.w500, // Medium
+                      color: const Color(0xFF94A3B8), // text-muted per HTML
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  Text(
+                    'How can I help you\ntoday?',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 30, // text-3xl per HTML
+                      fontWeight: FontWeight.w700, // Bold
+                      color: const Color(0xFF2D2D44), // text-main per HTML
+                      height: 1.1, // leading-tight
+                      letterSpacing: -0.5, // tracking-tight
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              );
+            },
+          ),
+
+          Container(
+            margin: const EdgeInsets.only(top: 16, bottom: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              'I\'m here to help you learn your subjects offline. Choose a shortcut or ask me anything!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 15, // text-[15px] per HTML
+                color: const Color(0xFF94A3B8), // text-muted per HTML
+                height: 1.6, // leading-relaxed
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 48),
+
+          // Suggested Topics (2x2 Grid)
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            // Good height, will reduce icon spacing for more text width
+            childAspectRatio: 2.0,
+            children: [
+              _QuickActionCard(
+                icon: Icons.school, // Filled mortarboard
+                label: 'Homework Help',
+                onTap: () {
+                  _textController.text = 'Help with Homework: ';
+                  _textController.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _textController.text.length),
+                  );
+                },
+              ),
+              _QuickActionCard(
+                icon: Icons.lightbulb, // Filled lightbulb
+                label: 'Explain Concept',
+                onTap: () {
+                  _textController.text = 'Explain a Concept: ';
+                  _textController.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _textController.text.length),
+                  );
+                },
+              ),
+              _QuickActionCard(
+                icon: Icons.quiz_outlined, // Outlined quiz per reference
+                label: 'Take a Quiz',
+                onTap: () {
+                  _textController.text = 'Take a Quiz: ';
+                  _textController.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _textController.text.length),
+                  );
+                },
+              ),
+              _QuickActionCard(
+                icon: Icons.auto_fix_high, // Filled magic wand
+                label: 'Summarize',
+                onTap: () {
+                  _textController.text = 'Summarize: ';
+                  _textController.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _textController.text.length),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -299,19 +489,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.85,
         ),
         decoration: BoxDecoration(
           color: isUser
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
+              ? Colors.white
+              : const Color(0xFFF3E8FF), // Soft Violet for AI
+          border: isUser ? Border.all(color: Colors.grey[200]!) : null,
+          boxShadow: isUser
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 2,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
-            bottomRight: isUser ? Radius.zero : const Radius.circular(16),
+            topLeft: isUser ? const Radius.circular(20) : Radius.zero,
+            topRight: isUser ? Radius.zero : const Radius.circular(20),
+            bottomLeft: const Radius.circular(20),
+            bottomRight: const Radius.circular(20),
           ),
         ),
         child: Column(
@@ -321,10 +521,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.auto_awesome,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
+                    size: 14,
+                    color: Color(0xFF8B7FD6),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -332,12 +532,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     style: GoogleFonts.lexend(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: const Color(0xFF8B7FD6),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
             ],
             // ✅ Show bouncing dots for placeholder, otherwise render content
             _buildMessageContent(content, isUser, context),
@@ -356,108 +556,66 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // If assistant is showing placeholder, show progressive thinking indicator
     if (!isUser && content == '...') {
       return _ProgressiveThinkingIndicator(
-        color: Theme.of(context).colorScheme.primary,
+        color: const Color(0xFF8B7FD6),
         textColor: Theme.of(context).colorScheme.onSurfaceVariant,
       );
     }
+
+    final scale = ref.watch(fontSizeProvider); // Get scale factor
+    final textColor = isUser
+        ? const Color(0xFF1A1A1A)
+        : const Color(0xFF2D2D2D);
 
     // Otherwise render normal content
     return isUser
         ? Text(
             content,
             style: GoogleFonts.lexend(
-              fontSize: 15.5,
+              fontSize: (16 * scale).toDouble(),
               fontWeight: FontWeight.w400,
               height: 1.5,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              color: textColor,
             ),
           )
         : MarkdownBody(
             data: content,
             styleSheet: MarkdownStyleSheet(
               // Lexend font - designed for reading accessibility
-              // Perfect for students as it reduces visual stress
               p: GoogleFonts.lexend(
-                fontSize: 15.5,
+                fontSize: (16 * scale).toDouble(),
                 fontWeight: FontWeight.w400,
-                height: 1.7, // Generous line height for easy reading
-                color: Theme.of(context).colorScheme.onSurface,
-                letterSpacing: 0.2,
+                height: 1.6,
+                color: textColor,
               ),
-              // Bold key terms with accent color
               strong: GoogleFonts.lexend(
-                fontSize: 15.5,
                 fontWeight: FontWeight.w700,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? const Color(0xFF64B5F6) // Light blue for dark mode
-                    : const Color(0xFF1565C0), // Deep blue for light mode
+                color: const Color(0xFF6A1B9A), // Deep Purple for bold
+                fontSize: (16 * scale).toDouble(), // Added scale for bold
               ),
-              // Italic for emphasis
-              em: GoogleFonts.lexend(
-                fontSize: 15.5,
-                fontStyle: FontStyle.italic,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              // Headings for structure
               h1: GoogleFonts.lexend(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                height: 1.4,
-                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: (22 * scale).toDouble(),
+                fontWeight: FontWeight.bold,
               ),
               h2: GoogleFonts.lexend(
-                fontSize: 19,
-                fontWeight: FontWeight.w600,
-                height: 1.4,
-                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: (20 * scale).toDouble(),
+                fontWeight: FontWeight.bold,
               ),
               h3: GoogleFonts.lexend(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                height: 1.4,
-                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: (18 * scale).toDouble(),
+                fontWeight: FontWeight.bold,
               ),
-              // Bullet points - clear and spaced
               listBullet: GoogleFonts.lexend(
-                fontSize: 15.5,
-                height: 1.6,
-                color: Theme.of(context).colorScheme.primary,
+                fontSize: (16 * scale).toDouble(),
+                height: 1.5,
+                color: textColor,
               ),
-              listIndent: 20,
-              // Code blocks with monospace
               code: GoogleFonts.jetBrainsMono(
-                fontSize: 13,
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest.withAlpha(180),
-                color: Theme.of(context).colorScheme.tertiary,
+                fontSize: (13 * scale).toDouble(),
+                backgroundColor: Colors.white,
               ),
               codeblockDecoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withAlpha(50),
-                ),
-              ),
-              codeblockPadding: const EdgeInsets.all(14),
-              // Blockquotes for definitions/important notes
-              blockquote: GoogleFonts.lexend(
-                fontSize: 15,
-                fontStyle: FontStyle.italic,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              blockquoteDecoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 4,
-                  ),
-                ),
-              ),
-              blockquotePadding: const EdgeInsets.only(
-                left: 16,
-                top: 8,
-                bottom: 8,
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
           );
@@ -467,66 +625,91 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final isGenerating = ref.watch(isGeneratingProvider);
 
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        ),
-      ),
-      child: Row(
+      // Removed white background and shadow as requested
+      color: Colors.transparent,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: TextField(
-              controller: _textController,
-              textInputAction:
-                  TextInputAction.send, // Change keyboard entry to "Send"
-              onSubmitted: (_) => _handleSubmitted(_textController.text),
-              // ✅ FIX: Trigger rebuild when text changes so send button updates
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: 'Ask anything...',
-                hintStyle: GoogleFonts.inter(),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
+          // Chips Removed
+          // Input Area
+          Padding(
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+            child: Container(
+              height: 56, // 56px height per spec
+              decoration: BoxDecoration(
+                color: Colors.white, // White to pop against #F8F9FA bg
+                borderRadius: BorderRadius.circular(
+                  28,
+                ), // Pill shape (half of height)
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color.fromRGBO(
+                      139,
+                      127,
+                      214,
+                      0.12,
+                    ), // Stronger shadow per spec
+                    blurRadius: 24,
+                    offset: Offset(0, 8),
+                  ),
+                ],
               ),
-              minLines: 1,
-              maxLines: 5,
-              textCapitalization: TextCapitalization.sentences,
-            ),
-          ),
-          // ✅ Dynamic Send/Stop button with visual feedback
-          IconButton.filled(
-            onPressed: isGenerating
-                ? () =>
-                      ref.read(chatProvider.notifier).cancelCurrentGeneration()
-                : _textController.text.trim().isEmpty
-                ? null
-                : () => _handleSubmitted(_textController.text),
-            icon: isGenerating
-                ? const Icon(Icons.stop_rounded, size: 24) // Clear stop icon
-                : const Icon(Icons.arrow_upward),
-            tooltip: isGenerating ? 'Stop generating' : 'Send message',
-            style: IconButton.styleFrom(
-              backgroundColor: isGenerating
-                  ? Colors
-                        .red
-                        .shade600 // Red when generating
-                  : Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: Theme.of(
-                context,
-              ).colorScheme.surfaceContainerHighest,
+              padding: const EdgeInsets.only(
+                left: 20,
+                right: 12,
+              ), // 12px right padding per spec
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _textController,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) =>
+                          _handleSubmitted(_textController.text),
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'Ask me anything...',
+                        hintStyle: GoogleFonts.inter(
+                          color: const Color(0xFF9CA3AF),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                        color: const Color(0xFF1A1A1A),
+                      ),
+                      minLines: 1,
+                      maxLines: 1, // Single line for 56px height
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                  ),
+                  // Send Button - centered vertically
+                  IconButton(
+                    onPressed: isGenerating
+                        ? () => ref
+                              .read(chatProvider.notifier)
+                              .cancelCurrentGeneration()
+                        : _textController.text.trim().isEmpty
+                        ? null
+                        : () => _handleSubmitted(_textController.text),
+                    icon: isGenerating
+                        ? const Icon(
+                            Icons.stop_circle_outlined,
+                            size: 24,
+                            color: Colors.red,
+                          )
+                        : const Icon(Icons.arrow_upward, size: 24),
+                    style: IconButton.styleFrom(
+                      foregroundColor: const Color(0xFF8B7FD6),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -669,6 +852,84 @@ class _BouncingDotState extends State<_BouncingDot>
           ),
         );
       },
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white, // Surface
+        borderRadius: BorderRadius.circular(24), // 24px Radius
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+          width: 1,
+        ), // 1px Subtle Border
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(
+              139,
+              127,
+              214,
+              0.12,
+            ), // Stronger shadow per spec
+            blurRadius: 24,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 14,
+            ), // Reduced horizontal padding
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F2FB),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: const Color(0xFF8B7FD6), size: 24),
+                ),
+                const SizedBox(width: 8), // Reduced gap for more text space
+                Expanded(
+                  child: Text(
+                    label,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF2D2D44),
+                      height: 1.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

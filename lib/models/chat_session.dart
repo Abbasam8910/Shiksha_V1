@@ -17,10 +17,14 @@ class ChatSession extends HiveObject {
   @HiveField(3)
   final DateTime lastUpdated;
 
+  @HiveField(4)
+  final String? subject;
+
   ChatSession({
     required this.id,
     required this.title,
     required this.messages,
     required this.lastUpdated,
+    this.subject,
   });
 }

@@ -21,6 +21,7 @@ class ChatSessionAdapter extends TypeAdapter<ChatSession> {
       title: fields[1] as String,
       messages: (fields[2] as List).cast<ChatMessage>(),
       lastUpdated: fields[3] as DateTime,
+      subject: fields[4] as String?,
     );
   }
 
@@ -35,7 +36,9 @@ class ChatSessionAdapter extends TypeAdapter<ChatSession> {
       ..writeByte(2)
       ..write(obj.messages)
       ..writeByte(3)
-      ..write(obj.lastUpdated);
+      ..write(obj.lastUpdated)
+      ..writeByte(4)
+      ..write(obj.subject);
   }
 
   @override
