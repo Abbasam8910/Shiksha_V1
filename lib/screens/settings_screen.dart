@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/chat_provider.dart';
-import '../providers/theme_provider.dart';
+
 import '../providers/ui_provider.dart'; // For Text Size
 import 'profile_setup_screen.dart';
 
@@ -12,7 +12,6 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeProvider);
     final fontSize = ref.watch(fontSizeProvider);
 
     return Scaffold(
@@ -33,15 +32,6 @@ class SettingsScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF1A1A1A)),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(
-              Icons.help_outline_rounded,
-              color: Color(0xFF1A1A1A),
-            ),
-            onPressed: () {}, // Placeholder for future help
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -91,7 +81,7 @@ class SettingsScreen extends ConsumerWidget {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.storage_rounded,
+                          Icons.dns_rounded, // Database/cylinder icon
                           color: Color(0xFF8B7FD6),
                           size: 20,
                         ),
@@ -248,47 +238,6 @@ class SettingsScreen extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'App Theme',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF1A1A1A),
-                        ),
-                      ),
-                      // Custom Toggle
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8F9FA),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            _ThemeOption(
-                              label: 'Light',
-                              icon: Icons.wb_sunny_rounded,
-                              isSelected: themeMode == ThemeMode.light,
-                              onTap: () => ref
-                                  .read(themeProvider.notifier)
-                                  .setTheme(ThemeMode.light),
-                            ),
-                            _ThemeOption(
-                              label: 'Dark',
-                              icon: Icons.dark_mode_rounded,
-                              isSelected: themeMode == ThemeMode.dark,
-                              onTap: () => ref
-                                  .read(themeProvider.notifier)
-                                  .setTheme(ThemeMode.dark),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
                         'Text Size',
                         style: GoogleFonts.inter(
                           fontSize: 16,
@@ -395,7 +344,7 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             Center(
               child: Text(
-                'Version 1.0.4 (Offline Build)',
+                'Shiksha AI',
                 style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[400]),
               ),
             ),
@@ -435,65 +384,13 @@ class SettingsScreen extends ConsumerWidget {
                 );
               }
             },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
             child: const Text('Clear History'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ThemeOption extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ThemeOption({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isSelected ? const Color(0xFF8B7FD6) : Colors.grey[400],
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? const Color(0xFF8B7FD6) : Colors.grey[400],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
