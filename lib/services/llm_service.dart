@@ -220,6 +220,8 @@ class LLMService {
         content: _config.systemPrompt,
       );
 
+      // Force reload for full reset (new chat)
+      _needsContextReload = true;
       await reloadLlamaContext();
       _log('✅ [CONTEXT] Reset complete');
     }
@@ -231,9 +233,11 @@ class LLMService {
       _log('⚠️ [CONTEXT] Reload skipped (in progress or not needed)');
       return;
     }
-    if (!_isInitialized || _llamaParent == null) return;
+    if (_llamaParent == null) return;
 
     _isReloadingContext = true;
+    _isInitialized =
+        false; // 🛡️ Block streamResponse during isolate recreation
 
     try {
       _log('🔄 [CONTEXT] Reloading LlamaParent to clear KV cache...');
@@ -300,10 +304,12 @@ class LLMService {
         },
       );
 
+      _isInitialized = true; // ✅ Isolate ready, allow streamResponse
       _needsContextReload = false;
       _log('✅ [CONTEXT] LlamaParent reloaded, KV cache cleared');
     } catch (e) {
       _log('❌ [CONTEXT] Reload failed: $e');
+      _isInitialized = false; // Keep blocked on failure
       rethrow;
     } finally {
       _isReloadingContext = false;
@@ -377,8 +383,26 @@ class LLMService {
       '🚀 [ENTRY] streamResponse called with: "$message" (gen $myGenerationId)',
     );
     _log(
-      '🔍 [STATE] _isInitialized: $_isInitialized, _isGenerating: $_isGenerating',
+      '🔍 [STATE] _isInitialized: $_isInitialized, _isGenerating: $_isGenerating, _isReloadingContext: $_isReloadingContext',
     );
+
+    // 🛡️ RACE CONDITION FIX: Wait for any in-progress context reload to finish
+    // This prevents "No child isolate found" crash when user sends a message
+    // immediately after clicking "New Chat" while the isolate is being recreated.
+    if (_isReloadingContext) {
+      _log('⏳ [STREAM] Waiting for context reload to finish...');
+      int reloadWait = 0;
+      while (_isReloadingContext) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        reloadWait++;
+        if (reloadWait > 100) {
+          // 10 second max wait
+          _log('❌ [STREAM] Context reload timed out after 10s');
+          throw Exception('Model is restarting. Please try again in a moment.');
+        }
+      }
+      _log('✅ [STREAM] Context reload finished, proceeding...');
+    }
 
     if (!_isInitialized ||
         _llamaParent == null ||
@@ -556,7 +580,14 @@ class LLMService {
         _log(
           '⏱️ [TIMEOUT] $timeoutType triggered (${fullResponse.length} chars)',
         );
-        _needsContextReload = true;
+        // Only reload context if model completely failed to start (45s with no tokens).
+        // Dynamic/Smart timeouts are NORMAL completion (model stopped → timer fires).
+        // Setting _needsContextReload on normal completions caused the "Amnesia Loop"
+        // where every message triggered a full KV cache reload + re-process all history.
+        if (!hasReceivedFirstToken) {
+          _needsContextReload =
+              true; // Real failure: model didn't produce any output
+        }
         _currentResponseController?.close();
       });
     }
@@ -648,6 +679,7 @@ class LLMService {
       }
     } catch (e) {
       _log('❌ [STREAM] Error: $e');
+      _needsContextReload = true; // Error = corrupted state, must reload
       // User-friendly error mapping
       if (e is TimeoutException) {
         throw Exception(
